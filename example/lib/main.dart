@@ -1,7 +1,7 @@
 import 'dart:developer';
 
+import 'package:custom_map_search_and_pick/custom_map.dart';
 import 'package:flutter/material.dart';
-import 'package:open_street_map_search_and_pick/open_street_map_search_and_pick.dart';
 
 void main() {
   runApp(const MyApp());
@@ -40,7 +40,7 @@ class _MyHomePageState extends State<MyHomePage> {
         appBar: AppBar(
           title: Text(widget.title),
         ),
-        body: OpenStreetMapSearchAndPick(
+        body: CustomSearchAndPickMap(
           buttonTextStyle:
               const TextStyle(fontSize: 18, fontStyle: FontStyle.normal),
           buttonColor: Colors.blue,

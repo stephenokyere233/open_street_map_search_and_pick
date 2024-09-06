@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:open_street_map_search_and_pick/model.dart';
+import 'package:custom_map_search_and_pick/model.dart';
 
 class SearchBarWidget extends StatefulWidget {
   const SearchBarWidget(

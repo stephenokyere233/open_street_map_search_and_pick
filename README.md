@@ -26,12 +26,12 @@ This lib was designed to use open street map to set location on Flutter applicat
 Import the following package in your dart file
 
 ```dart
-import 'package:open_street_map_search_and_pick/open_street_map_search_and_pick.dart';
+import 'package:custom_map_search_and_pick/custom_map_search_and_pick.dart';
 ```
 
 To use is simple, just call the widget bellow. You need to pass the default center position of the map and a onPicked method to get the picked position from the map.
 
-    OpenStreetMapSearchAndPick(
+    CustomSearchAndPickMap(
             center: LatLng(23, 89),
             buttonColor: Colors.blue,
             buttonText: 'Set Current Location',
@@ -56,7 +56,7 @@ latLong has two more properties.
 
 For example
 
-    OpenStreetMapSearchAndPick(
+    CustomSearchAndPickMap(
             center: LatLng(23, 89),
             buttonColor: Colors.blue,
             buttonText: 'Set Current Location',

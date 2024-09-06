@@ -8,10 +8,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:open_street_map_search_and_pick/model.dart';
-import 'package:open_street_map_search_and_pick/widgets/controls.dart';
-import 'package:open_street_map_search_and_pick/widgets/search.dart';
-import 'package:open_street_map_search_and_pick/widgets/wide_button.dart';
+
+import 'model.dart';
+import 'widgets/controls.dart';
+import 'widgets/search.dart';
+import 'widgets/wide_button.dart';
 
 TileLayer get openStreetMapTileLayer => TileLayer(
       urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -22,7 +23,7 @@ TileLayer get openStreetMapTileLayer => TileLayer(
 CameraFit ghanaBounds = const CameraFit.coordinates(
     coordinates: [LatLng(11.166667, -3.255555), LatLng(4.733333, 1.2)]);
 
-class OpenStreetMapSearchAndPick extends StatefulWidget {
+class CustomSearchAndPickMap extends StatefulWidget {
   final void Function(PickedData pickedData) onPicked;
   final IconData zoomInIcon;
   final IconData zoomOutIcon;
@@ -40,7 +41,7 @@ class OpenStreetMapSearchAndPick extends StatefulWidget {
   final TextStyle buttonTextStyle;
   final String baseUri;
 
-  const OpenStreetMapSearchAndPick({
+  const CustomSearchAndPickMap({
     super.key,
     required this.onPicked,
     this.zoomOutIcon = Icons.zoom_out_map,
@@ -63,12 +64,11 @@ class OpenStreetMapSearchAndPick extends StatefulWidget {
   });
 
   @override
-  State<OpenStreetMapSearchAndPick> createState() =>
+  State<CustomSearchAndPickMap> createState() =>
       _OpenStreetMapSearchAndPickState();
 }
 
-class _OpenStreetMapSearchAndPickState
-    extends State<OpenStreetMapSearchAndPick> {
+class _OpenStreetMapSearchAndPickState extends State<CustomSearchAndPickMap> {
   MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
   late Future<Position?> latlongFuture;
