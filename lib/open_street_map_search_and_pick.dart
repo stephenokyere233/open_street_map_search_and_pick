@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -238,6 +239,8 @@ class _OpenStreetMapSearchAndPickState
     );
   }
 
+  final Dio dio = Dio();
+
   Future<Position?> getCurrentPosLatLong() async {
     LocationPermission locationPermission = await Geolocator.checkPermission();
 
@@ -249,7 +252,7 @@ class _OpenStreetMapSearchAndPickState
 
     /// have location permission
     Position position = await Geolocator.getCurrentPosition();
-    setNameCurrentPosAtInit(position.latitude, position.longitude);
+    await setNameCurrentPosAtInit(position.latitude, position.longitude);
     return position;
   }
 
@@ -259,59 +262,75 @@ class _OpenStreetMapSearchAndPickState
       return null;
     }
     Position position = await Geolocator.getCurrentPosition();
-    setNameCurrentPosAtInit(position.latitude, position.longitude);
+    await setNameCurrentPosAtInit(position.latitude, position.longitude);
     return position;
   }
 
-  void setNameCurrentPos() async {
+  Future<void> setNameCurrentPos() async {
     double latitude = _mapController.camera.center.latitude;
     double longitude = _mapController.camera.center.longitude;
+
     if (kDebugMode) {
-      print(latitude);
+      print("Latitude: $latitude, Longitude: $longitude");
     }
-    if (kDebugMode) {
-      print(longitude);
-    }
+
     String url =
         '${widget.baseUri}/reverse?format=json&lat=$latitude&lon=$longitude&zoom=18&addressdetails=1';
 
-    var response = await client.get(Uri.parse(url));
-    var decodedResponse =
-        jsonDecode(utf8.decode(response.bodyBytes)) as Map<dynamic, dynamic>;
+    try {
+      Response response = await dio.get(url);
+      var decodedResponse = response.data as Map<String, dynamic>;
 
-    _searchController.text =
-        decodedResponse['display_name'] ?? "MOVE TO CURRENT POSITION";
-    setState(() {});
+      _searchController.text =
+          decodedResponse['display_name'] ?? "MOVE TO CURRENT POSITION";
+      setState(() {});
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error fetching current position name: $e");
+      }
+    }
   }
 
-  void setNameCurrentPosAtInit(double latitude, double longitude) async {
+  Future<void> setNameCurrentPosAtInit(
+      double latitude, double longitude) async {
     if (kDebugMode) {
-      print(latitude);
-      print(longitude);
+      log("Latitude: $latitude, Longitude: $longitude");
     }
 
     String url =
         '${widget.baseUri}/reverse?format=json&lat=$latitude&lon=$longitude&zoom=18&addressdetails=1';
 
-    var response = await client.get(Uri.parse(url));
-    var decodedResponse =
-        jsonDecode(utf8.decode(response.bodyBytes)) as Map<dynamic, dynamic>;
+    try {
+      Response response = await dio.get(url);
+      var decodedResponse = response.data as Map<String, dynamic>;
 
-    _searchController.text =
-        decodedResponse['display_name'] ?? "MOVE TO CURRENT POSITION";
+      _searchController.text =
+          decodedResponse['display_name'] ?? "MOVE TO CURRENT POSITION";
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error fetching initial position name: $e");
+      }
+    }
   }
 
   Future<PickedData> pickData() async {
     LatLong center = LatLong(_mapController.camera.center.latitude,
         _mapController.camera.center.longitude);
-    var client = http.Client();
-    String url =
-        '${widget.baseUri}/reverse?format=json&lat=${_mapController.camera.center.latitude}&lon=${_mapController.camera.center.longitude}&zoom=18&addressdetails=1';
 
-    var response = await client.get(Uri.parse(url));
-    var decodedResponse =
-        jsonDecode(utf8.decode(response.bodyBytes)) as Map<dynamic, dynamic>;
-    String displayName = decodedResponse['display_name'];
-    return PickedData(center, displayName, decodedResponse["address"]);
+    String url =
+        '${widget.baseUri}/reverse?format=json&lat=${center.latitude}&lon=${center.longitude}&zoom=18&addressdetails=1';
+
+    try {
+      Response response = await dio.get(url);
+      var decodedResponse = response.data as Map<String, dynamic>;
+
+      String displayName = decodedResponse['display_name'];
+      return PickedData(center, displayName, decodedResponse["address"]);
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error picking data: $e");
+      }
+      return PickedData(center, "Error retrieving data", {});
+    }
   }
 }
