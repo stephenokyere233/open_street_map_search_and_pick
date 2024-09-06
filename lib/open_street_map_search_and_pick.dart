@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer';
 
 import 'package:dio/dio.dart';
@@ -8,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:open_street_map_search_and_pick/model.dart';
 import 'package:open_street_map_search_and_pick/widgets/controls.dart';
@@ -73,8 +71,8 @@ class _OpenStreetMapSearchAndPickState
     extends State<OpenStreetMapSearchAndPick> {
   MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
-  var client = http.Client();
   late Future<Position?> latlongFuture;
+  final Dio dio = Dio();
 
   @override
   void initState() {
@@ -82,15 +80,18 @@ class _OpenStreetMapSearchAndPickState
     _mapController.mapEventStream.listen(
       (event) async {
         if (event is MapEventMoveEnd) {
-          var client = http.Client();
           String url =
               '${widget.baseUri}/reverse?format=json&lat=${event.camera.center.latitude}&lon=${event.camera.center.longitude}&zoom=18&addressdetails=1';
-          var response = await client.get(Uri.parse(url));
-          var decodedResponse = jsonDecode(utf8.decode(response.bodyBytes))
-              as Map<dynamic, dynamic>;
-
-          _searchController.text = decodedResponse['display_name'];
-          setState(() {});
+          try {
+            Response response = await dio.get(url);
+            var decodedResponse = response.data as Map<String, dynamic>;
+            _searchController.text = decodedResponse['display_name'];
+            setState(() {});
+          } catch (e) {
+            if (kDebugMode) {
+              print("Error during map move: $e");
+            }
+          }
         }
       },
     );
@@ -194,17 +195,15 @@ class _OpenStreetMapSearchAndPickState
                       _mapController.camera.zoom,
                     );
                   }
-                  setNameCurrentPos();
+                  await setNameCurrentPos();
                 },
               ),
               SearchBarWidget(
                 searchController: _searchController,
-                baseUri:
-                    'https://nominatim.openstreetmap.org', // Search API base URI
+                baseUri: widget.baseUri, // Search API base URI
                 hintText: 'Search for a location...', // Search hint text
                 mapController: _mapController, // Pass the map controller
                 onOptionSelected: (LatLng location) {
-                  // Handle additional logic if needed, such as displaying markers, etc.
                   print('Selected Location: $location');
                 },
                 inputBorder: inputBorder,
@@ -239,18 +238,14 @@ class _OpenStreetMapSearchAndPickState
     );
   }
 
-  final Dio dio = Dio();
-
   Future<Position?> getCurrentPosLatLong() async {
     LocationPermission locationPermission = await Geolocator.checkPermission();
 
-    /// do not have location permission
     if (locationPermission == LocationPermission.denied) {
       locationPermission = await Geolocator.requestPermission();
       return await getPosition(locationPermission);
     }
 
-    /// have location permission
     Position position = await Geolocator.getCurrentPosition();
     await setNameCurrentPosAtInit(position.latitude, position.longitude);
     return position;
@@ -286,17 +281,13 @@ class _OpenStreetMapSearchAndPickState
       setState(() {});
     } catch (e) {
       if (kDebugMode) {
-        print("Error fetching current position name: $e");
+        print("Error during reverse geocoding: $e");
       }
     }
   }
 
   Future<void> setNameCurrentPosAtInit(
       double latitude, double longitude) async {
-    if (kDebugMode) {
-      log("Latitude: $latitude, Longitude: $longitude");
-    }
-
     String url =
         '${widget.baseUri}/reverse?format=json&lat=$latitude&lon=$longitude&zoom=18&addressdetails=1';
 
@@ -306,15 +297,16 @@ class _OpenStreetMapSearchAndPickState
 
       _searchController.text =
           decodedResponse['display_name'] ?? "MOVE TO CURRENT POSITION";
+      setState(() {});
     } catch (e) {
       if (kDebugMode) {
-        print("Error fetching initial position name: $e");
+        print("Error during reverse geocoding at init: $e");
       }
     }
   }
 
   Future<PickedData> pickData() async {
-    LatLong center = LatLong(_mapController.camera.center.latitude,
+    LatLng center = LatLng(_mapController.camera.center.latitude,
         _mapController.camera.center.longitude);
 
     String url =

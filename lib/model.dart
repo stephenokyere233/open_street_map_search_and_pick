@@ -1,11 +1,13 @@
-class LatLong {
-  final double latitude;
-  final double longitude;
-  const LatLong(this.latitude, this.longitude);
-}
+// class LatLong {
+//   final double latitude;
+//   final double longitude;
+//   const LatLong(this.latitude, this.longitude);
+// }
+
+import 'package:latlong2/latlong.dart';
 
 class PickedData {
-  final LatLong latLong;
+  final LatLng latLong;
   final String addressName;
   final Map<String, dynamic> address;
 
