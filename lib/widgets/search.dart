@@ -1,8 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'dart:convert';
 import 'dart:async';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:custom_map_search_and_pick/model.dart';
 
@@ -131,14 +130,12 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
         _isLoading = true;
       });
 
-      final client = http.Client();
+      final dio = Dio();
       try {
         final url =
             '${widget.baseUri}/search?q=$value&format=json&polygon_geojson=1&addressdetails=1';
-
-        final response = await client.get(Uri.parse(url));
-        final decodedResponse =
-            jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        final response = await dio.get(url);
+        final decodedResponse = response.data as List<dynamic>;
 
         // Filter for items where "country_code" is "gh" or "country" is "Ghana"
         final filteredResponse = decodedResponse.where((e) {
@@ -147,6 +144,7 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
           return countryCode == 'gh' || country == 'ghana';
         }).toList();
 
+        // Update the state with the filtered response
         setState(() {
           _options = filteredResponse
               .map(
@@ -159,10 +157,11 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
               .toList();
         });
       } finally {
+        // Set loading state to false and close Dio
         setState(() {
           _isLoading = false;
         });
-        client.close();
+        dio.close();
       }
     });
   }
