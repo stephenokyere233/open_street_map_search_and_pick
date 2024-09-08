@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer';
 
+import 'package:custom_map_search_and_pick/services/location.service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -20,8 +21,9 @@ TileLayer get openStreetMapTileLayer => TileLayer(
       tileProvider: CancellableNetworkTileProvider(),
     );
 
-CameraFit ghanaBounds = const CameraFit.coordinates(
-    coordinates: [LatLng(11.166667, -3.255555), LatLng(4.733333, 1.2)]);
+// CameraConstraint ghanaBounds = CameraConstraint.containCenter(
+//     bounds: LatLngBounds(
+//         const LatLng(11.166667, -3.255555), const LatLng(4.733333, 1.2)));
 
 class CustomSearchAndPickMap extends StatefulWidget {
   final void Function(PickedData pickedData) onPicked;
@@ -40,28 +42,45 @@ class CustomSearchAndPickMap extends StatefulWidget {
   final double buttonWidth;
   final TextStyle buttonTextStyle;
   final String baseUri;
+  final Future<List<OSMModel>> Function(String)? customSearchFunction;
+  final bool Function(OSMModel)? customFilterFunction;
+  final CameraConstraint? cameraConstraint;
+  final double initialZoom;
+  final double minZoom;
+  final double maxZoom;
+  final Function(LatLng)? onOptionSelected;
+  final String searchBarHint;
+  final String notFoundText;
 
-  const CustomSearchAndPickMap({
-    super.key,
-    required this.onPicked,
-    this.zoomOutIcon = Icons.zoom_out_map,
-    this.zoomInIcon = Icons.zoom_in_map,
-    this.currentLocationIcon = Icons.my_location,
-    this.buttonColor = Colors.blue,
-    this.locationPinIconColor = Colors.blue,
-    this.locationPinText = 'Location',
-    this.locationPinTextStyle = const TextStyle(
-        fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
-    this.hintText = 'Search Location',
-    this.buttonTextStyle = const TextStyle(
-        fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-    this.buttonTextColor = Colors.white,
-    this.buttonText = 'Set Current Location',
-    this.buttonHeight = 50,
-    this.buttonWidth = 200,
-    this.baseUri = 'https://nominatim.openstreetmap.org',
-    this.locationPinIcon = Icons.location_on,
-  });
+  const CustomSearchAndPickMap(
+      {super.key,
+      required this.onPicked,
+      this.zoomOutIcon = Icons.zoom_out_map,
+      this.zoomInIcon = Icons.zoom_in_map,
+      this.currentLocationIcon = Icons.my_location,
+      this.buttonColor = Colors.blue,
+      this.locationPinIconColor = Colors.blue,
+      this.locationPinText = 'Location',
+      this.locationPinTextStyle = const TextStyle(
+          fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+      this.hintText = 'Search Location',
+      this.buttonTextStyle = const TextStyle(
+          fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+      this.buttonTextColor = Colors.white,
+      this.buttonText = 'Set Current Location',
+      this.buttonHeight = 50,
+      this.buttonWidth = 200,
+      this.baseUri = 'https://nominatim.openstreetmap.org',
+      this.locationPinIcon = Icons.location_on,
+      this.customSearchFunction,
+      this.customFilterFunction,
+      this.cameraConstraint,
+      this.initialZoom = 15.0,
+      this.minZoom = 6,
+      this.maxZoom = 30,
+      this.onOptionSelected,
+      this.searchBarHint = 'Search for a location...',
+      this.notFoundText = 'Oops..No results found!'});
 
   @override
   State<CustomSearchAndPickMap> createState() =>
@@ -141,12 +160,12 @@ class _OpenStreetMapSearchAndPickState extends State<CustomSearchAndPickMap> {
                 child: FlutterMap(
                   options: MapOptions(
                       initialCenter: mapCentre!,
-                      initialZoom: 15.0,
-                      initialCameraFit: ghanaBounds,
-                      maxZoom: 30,
+                      initialZoom: widget.initialZoom,
+                      cameraConstraint: widget.cameraConstraint,
+                      maxZoom: widget.maxZoom,
                       interactionOptions:
                           const InteractionOptions(flags: InteractiveFlag.all),
-                      minZoom: 6),
+                      minZoom: widget.minZoom),
                   mapController: _mapController,
                   children: [openStreetMapTileLayer],
                 ),
@@ -169,7 +188,7 @@ class _OpenStreetMapSearchAndPickState extends State<CustomSearchAndPickMap> {
                 zoomInIcon: Icons.zoom_in,
                 zoomOutIcon: Icons.zoom_out,
                 currentLocationIcon: Icons.my_location,
-                buttonColor: Colors.blue,
+                buttonColor: widget.buttonColor,
                 buttonTextColor: Colors.white,
                 onZoomIn: () {
                   _mapController.move(
@@ -201,13 +220,19 @@ class _OpenStreetMapSearchAndPickState extends State<CustomSearchAndPickMap> {
               SearchBarWidget(
                 searchController: _searchController,
                 baseUri: widget.baseUri, // Search API base URI
-                hintText: 'Search for a location...', // Search hint text
+                hintText: widget.searchBarHint, // Search hint text
                 mapController: _mapController, // Pass the map controller
+                customFilterFunction: widget.customFilterFunction,
+                customSearchFunction: widget.customSearchFunction,
                 onOptionSelected: (LatLng location) {
-                  print('Selected Location: $location');
+                  if (widget.onOptionSelected != null) {
+                    widget.onOptionSelected!(
+                        location); // Call the function if it's not null
+                  }
                 },
                 inputBorder: inputBorder,
                 inputFocusBorder: inputFocusBorder,
+                notFoundText: widget.notFoundText,
               ),
               Positioned(
                 bottom: 0,
@@ -306,23 +331,21 @@ class _OpenStreetMapSearchAndPickState extends State<CustomSearchAndPickMap> {
   }
 
   Future<PickedData> pickData() async {
-    LatLng center = LatLng(_mapController.camera.center.latitude,
+    final center = LatLng(_mapController.camera.center.latitude,
         _mapController.camera.center.longitude);
-
-    String url =
-        '${widget.baseUri}/reverse?format=json&lat=${center.latitude}&lon=${center.longitude}&zoom=18&addressdetails=1';
-
     try {
-      Response response = await dio.get(url);
-      var decodedResponse = response.data as Map<String, dynamic>;
+      final decodedResponse = await LocationService.getLocationByCoordinates(
+          lat: _mapController.camera.center.latitude,
+          lng: _mapController.camera.center.longitude);
+      log(name: "PICKED NAME", decodedResponse!.toJson().toString());
 
-      String displayName = decodedResponse['display_name'];
-      return PickedData(center, displayName, decodedResponse["address"]);
+      String displayName = decodedResponse.displayName;
+      return PickedData(center, displayName, decodedResponse.address);
     } catch (e) {
       if (kDebugMode) {
         print("Error picking data: $e");
       }
-      return PickedData(center, "Error retrieving data", {});
+      return PickedData(center, "Error retrieving data", null);
     }
   }
 }

@@ -1,20 +1,25 @@
-import 'package:dio/dio.dart';
+import 'dart:async';
+import 'dart:developer';
+import 'package:custom_map_search_and_pick/services/location.service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'dart:async';
 import 'package:latlong2/latlong.dart';
 import 'package:custom_map_search_and_pick/model.dart';
 
 class SearchBarWidget extends StatefulWidget {
-  const SearchBarWidget(
-      {super.key,
-      required this.baseUri,
-      required this.hintText,
-      required this.mapController,
-      required this.onOptionSelected,
-      required this.searchController,
-      this.inputBorder,
-      this.inputFocusBorder});
+  const SearchBarWidget({
+    super.key,
+    required this.baseUri,
+    required this.hintText,
+    required this.mapController,
+    required this.onOptionSelected,
+    required this.searchController,
+    this.inputBorder,
+    this.inputFocusBorder,
+    this.customSearchFunction,
+    this.customFilterFunction,
+    this.notFoundText = 'Oops..No results found!',
+  });
 
   final TextEditingController searchController;
   final InputBorder? inputBorder;
@@ -23,6 +28,9 @@ class SearchBarWidget extends StatefulWidget {
   final String hintText;
   final MapController mapController;
   final Function(LatLng) onOptionSelected;
+  final Future<List<OSMModel>> Function(String)? customSearchFunction;
+  final bool Function(OSMModel)? customFilterFunction;
+  final String notFoundText;
 
   @override
   State<SearchBarWidget> createState() => _SearchBarWidgetState();
@@ -31,7 +39,7 @@ class SearchBarWidget extends StatefulWidget {
 class _SearchBarWidgetState extends State<SearchBarWidget> {
   final FocusNode _focusNode = FocusNode();
   Timer? _debounce;
-  List<OSMdata> _options = [];
+  List<OSMModel> _options = [];
   bool _isLoading = false;
 
   @override
@@ -69,28 +77,25 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
     );
   }
 
-  /// Method to Build the Search Field
   Widget _buildSearchField() {
     return TextFormField(
-      controller:
-          widget.searchController, // Use the controller passed from parent
+      controller: widget.searchController,
       focusNode: _focusNode,
       decoration: InputDecoration(
         hintText: widget.hintText,
-        border: const OutlineInputBorder(),
-        focusedBorder: const OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.blue),
-        ),
-        suffixIcon: _buildSuffixIcon(), // Add the loader and clear button here
+        border: widget.inputBorder ?? const OutlineInputBorder(),
+        focusedBorder: widget.inputFocusBorder ??
+            const OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.blue),
+            ),
+        suffixIcon: _buildSuffixIcon(),
       ),
       onChanged: _onSearchTextChanged,
     );
   }
 
-  /// Method to Build the Suffix Icon (Loader or Clear Button)
   Widget _buildSuffixIcon() {
     if (_isLoading) {
-      // Show loading spinner
       return const Padding(
         padding: EdgeInsets.all(10.0),
         child: CircularProgressIndicator(
@@ -98,7 +103,6 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
         ),
       );
     } else if (widget.searchController.text.isNotEmpty) {
-      // Show clear button when there's text
       return IconButton(
         icon: const Icon(Icons.clear),
         onPressed: () {
@@ -109,10 +113,9 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
         },
       );
     }
-    return const SizedBox(); // Show nothing if there is no text and not loading
+    return const SizedBox();
   }
 
-  /// Search Field Text Change Handler
   void _onSearchTextChanged(String value) {
     if (_debounce?.isActive ?? false) {
       _debounce?.cancel();
@@ -130,43 +133,43 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
         _isLoading = true;
       });
 
-      final dio = Dio();
-      try {
-        final url =
-            '${widget.baseUri}/search?q=$value&format=json&polygon_geojson=1&addressdetails=1';
-        final response = await dio.get(url);
-        final decodedResponse = response.data as List<dynamic>;
+      // Use custom search function if provided, else default to the internal one
+      if (widget.customSearchFunction != null) {
+        _options = await widget.customSearchFunction!(value);
+      } else {
+        log(value);
+        _options = await _defaultSearchFunction(value);
+      }
 
-        // Filter for items where "country_code" is "gh" or "country" is "Ghana"
-        final filteredResponse = decodedResponse.where((e) {
-          final countryCode = e['address']['country_code']?.toLowerCase();
-          final country = e['address']['country']?.toLowerCase();
-          return countryCode == 'gh' || country == 'ghana';
-        }).toList();
-
-        // Update the state with the filtered response
-        setState(() {
-          _options = filteredResponse
-              .map(
-                (e) => OSMdata(
-                  displayname: e['display_name'],
-                  lat: double.parse(e['lat']),
-                  lon: double.parse(e['lon']),
-                ),
-              )
-              .toList();
-        });
-      } finally {
-        // Set loading state to false and close Dio
-        setState(() {
-          _isLoading = false;
-        });
-        dio.close();
+      setState(() {
+        _isLoading = false;
+      });
+      // Check if no results were found
+      if (_options.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.notFoundText),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     });
   }
 
-  /// Method to Build the Options List
+  /// Default search function with optional custom filter
+  Future<List<OSMModel>> _defaultSearchFunction(String query) async {
+    final decodedResponse =
+        await LocationService.getLocationByName(query: query);
+    log(name: "FILTERED RESPONSE", decodedResponse.toString());
+
+    // Apply the custom filter if provided, otherwise return all results
+    final List<OSMModel> filteredResponse = widget.customFilterFunction != null
+        ? decodedResponse.where(widget.customFilterFunction!).toList()
+        : decodedResponse;
+    log(name: "FILTERED RESPONSE", filteredResponse.toString());
+    return filteredResponse; // Return filtered list
+  }
+
   Widget _buildOptionsList() {
     return ListView.builder(
       shrinkWrap: true,
@@ -174,14 +177,13 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
       itemCount: _options.length > 5 ? 5 : _options.length,
       itemBuilder: (context, index) {
         return ListTile(
-          title: Text(_options[index].displayname),
+          title: Text(_options[index].displayName),
           onTap: () => _onOptionSelected(index),
         );
       },
     );
   }
 
-  /// Option Selection Handler
   void _onOptionSelected(int index) {
     widget.mapController.move(
       LatLng(_options[index].lat, _options[index].lon),

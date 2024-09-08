@@ -45,6 +45,7 @@ class _MyHomePageState extends State<MyHomePage> {
               const TextStyle(fontSize: 18, fontStyle: FontStyle.normal),
           buttonColor: Colors.blue,
           buttonText: 'Set Current Location',
+          customFilterFunction: (p0) => p0.address.countryCode == "gh",
           onPicked: (pickedData) {
             log(pickedData.latLong.latitude.toString());
             log(pickedData.latLong.longitude.toString());
